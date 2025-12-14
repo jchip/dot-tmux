@@ -39,15 +39,19 @@ function arrowLeft(fromBg: string, toBg: string) {
   return `${fg(fromBg)}${bg(toBg)}${ARROW_LEFT}`;
 }
 
-async function getWindows(): Promise<
+async function getWindows(
+  sessionName: string
+): Promise<
   { index: number; name: string; active: boolean; activity: boolean }[]
 > {
   const proc = Bun.spawn(
     [
       "tmux",
       "list-windows",
+      "-t",
+      sessionName,
       "-F",
-      "#{window_index}|#{window_name}|#{window_active}|#{window_activity_flag}",
+      "#{window_index}|#{pane_current_command}|#{b:pane_current_path}|#{window_active}|#{window_activity_flag}",
     ],
     { stdout: "pipe" }
   );
@@ -57,26 +61,19 @@ async function getWindows(): Promise<
     .split("\n")
     .filter(Boolean)
     .map((line) => {
-      const [index, name, active, activity] = line.split("|");
+      const [index, cmd, path, active, activity] = line.split("|");
       return {
         index: parseInt(index),
-        name,
+        name: `${cmd}:${path}`,
         active: active === "1",
         activity: activity === "1",
       };
     });
 }
 
-async function getSession(): Promise<string> {
-  const proc = Bun.spawn(["tmux", "display-message", "-p", "#S"], {
-    stdout: "pipe",
-  });
-  return (await new Response(proc.stdout).text()).trim();
-}
 
-async function buildStatusLeft(): Promise<string> {
-  const session = await getSession();
-  const windows = await getWindows();
+async function buildStatusLeft(session: string): Promise<string> {
+  const windows = await getWindows(session);
   const firstWindow = windows[0];
 
   let nextBg = colors.bg;
@@ -94,8 +91,8 @@ async function buildStatusLeft(): Promise<string> {
   return out;
 }
 
-async function buildWindows(): Promise<string> {
-  const windows = await getWindows();
+async function buildWindows(session: string): Promise<string> {
+  const windows = await getWindows(session);
   let out = "";
 
   for (let i = 0; i < windows.length; i++) {
@@ -153,14 +150,19 @@ async function buildStatusRight(): Promise<string> {
 }
 
 const arg = process.argv[2];
+const session = process.argv[3];
 
 if (arg === "left") {
-  const left = await buildStatusLeft();
-  const windows = await buildWindows();
+  if (!session) {
+    console.error("Usage: status.ts left <session>");
+    process.exit(1);
+  }
+  const left = await buildStatusLeft(session);
+  const windows = await buildWindows(session);
   process.stdout.write(left + windows);
 } else if (arg === "right") {
   process.stdout.write(await buildStatusRight());
 } else {
-  console.error("Usage: status.ts [left|right]");
+  console.error("Usage: status.ts [left|right] [session]");
   process.exit(1);
 }
