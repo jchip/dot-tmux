@@ -136,16 +136,18 @@ async function buildStatusRight(): Promise<string> {
     hour12: false,
   });
 
-  const proc = Bun.spawn(["hostname", "-s"], { stdout: "pipe" });
-  const hostname = (await new Response(proc.stdout).text()).trim();
+  const hostname = process.env.HOSTNAME ?? process.env.HOST ?? null;
 
   let out = "";
   out += arrowLeft(colors.clock, colors.bg);
   out += style(colors.clockFg, colors.clock);
   out += ` ${time} `;
-  out += arrowLeft(colors.hostname, colors.clock);
-  out += style(colors.hostnameFg, colors.hostname, true);
-  out += ` ${hostname} `;
+
+  if (hostname) {
+    out += arrowLeft(colors.hostname, colors.clock);
+    out += style(colors.hostnameFg, colors.hostname, true);
+    out += ` ${hostname} `;
+  }
 
   return out;
 }
